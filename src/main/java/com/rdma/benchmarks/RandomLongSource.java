@@ -9,9 +9,11 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 
 public class RandomLongSource implements SourceFunction<Tuple2<Long, Long>> {
-    public static int SIZE= 1_000_000;
+    public static int SIZE= 100_000_000;
 //    public int SIZE = 100_000_000;
     private boolean run = true;
+    private int iterations=25;
+    private int currentIteration =1;
     @Override
     public void run(SourceContext<Tuple2<Long, Long>> sourceContext) throws Exception {
         while (run) {
@@ -22,8 +24,14 @@ public class RandomLongSource implements SourceFunction<Tuple2<Long, Long>> {
                     sourceContext.collect(new Tuple2<>(i, i));
                 }
             }
+
+            if (currentIteration==iterations){
+                run=false;
+            }else{
+                currentIteration++;
+            }
 //            randoms);
-            Thread.sleep(5);
+//            Thread.sleep(5);
         }
     }
 
