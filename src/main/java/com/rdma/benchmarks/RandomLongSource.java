@@ -1,38 +1,26 @@
 package com.rdma.benchmarks;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 
 public class RandomLongSource implements SourceFunction<Tuple2<Long, Long>> {
-    public static int SIZE= 100_000_000;
+    public static int SIZE= 10_000_000;
 //    public int SIZE = 100_000_000;
     private boolean run = true;
-    private int iterations=25;
-    private int currentIteration =1;
+    private int iterations=1;
+    private int currentIteration = 1;
+    private final LinkedBlockingQueue<Tuple2<Long, Long>> producer;
+    public RandomLongSource(LinkedBlockingQueue<Tuple2<Long, Long>> producer){
+        this.producer = producer;
+    }
+
     @Override
     public void run(SourceContext<Tuple2<Long, Long>> sourceContext) throws Exception {
         while (run) {
-            for (long i = 1; i <= SIZE; i++) {
-                if (i == SIZE) {
-                    sourceContext.collect(new Tuple2<>(i, System.currentTimeMillis()));
-                } else {
-                    sourceContext.collect(new Tuple2<>(i, i));
-                }
+                sourceContext.collect(producer.take());
             }
-
-            if (currentIteration==iterations){
-                run=false;
-            }else{
-                currentIteration++;
-            }
-//            randoms);
-//            Thread.sleep(5);
-        }
     }
 
     @Override

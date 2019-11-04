@@ -19,6 +19,8 @@
 package com.rdma.benchmarks;
 
 
+import java.util.concurrent.LinkedBlockingQueue;
+
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.core.fs.FileSystem;
@@ -38,21 +40,49 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
 public class StreamingJob {
+    static LinkedBlockingQueue<Tuple2<Long, Long>> producer;
 
     public static void main(String[] args) throws Exception {
+        System.out.println("usage rdma-*.jar <outpath> <producerThreadCount>");
+        String outPath=args[0];
+        int producerThreads = Integer.parseInt(args[1]);
+        for (int i=0;i<producerThreads;i++){
+            new Thread(new Producer(producer)).start();
+        }
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        DataStream<Tuple2<Long, Long>> elements = env.addSource(new RandomLongSource());
-        DataStream<Tuple2<Long, Long>> sums = elements.filter(p-> (p.f0 % RandomLongSource.SIZE == 0)).map(new MapFunction<Tuple2<Long, Long>, Tuple2<Long, Long>>() {
+        env.setBufferTimeout(0);
+        DataStream<Tuple2<Long, Long>> elements = env.addSource(new RandomLongSource(producer));
+        DataStream<Tuple2<Long, Long>> sums = elements
+//                .filter(p -> (p.f0 % RandomLongSource.SIZE == 0))
+                .map(new MapFunction<Tuple2<Long, Long>, Tuple2<Long, Long>>() {
             @Override
             public Tuple2<Long, Long> map(Tuple2<Long, Long> tuple2) throws Exception {
                 return new Tuple2<>(tuple2.f0, (System.currentTimeMillis() - tuple2.f1));
             }
         });
 
-        sums.writeAsText("/tmp/sums",FileSystem.WriteMode.OVERWRITE);
+        sums.writeAsText(outPath,FileSystem.WriteMode.OVERWRITE);
 //        sums.addSink(new DiscardingSink<>());
         // execute program
         env.execute("Flink Streaming Java API Skeleton");
+    }
+}
+
+class Producer implements Runnable{
+    LinkedBlockingQueue<Tuple2<Long, Long>> producer;
+
+
+    public Producer(LinkedBlockingQueue<Tuple2<Long, Long>> producer){
+        this.producer= producer;
+    }
+
+    @Override
+    public void run() {
+        while (true) {
+            for (long i=0;i<RandomLongSource.SIZE;i++) {
+                producer.add(new Tuple2<>(i,System.currentTimeMillis()));
+            }
+        }
     }
 }
