@@ -43,7 +43,7 @@ public class StreamingJob {
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         DataStream<Tuple2<Long, Long>> elements = env.addSource(new RandomLongSource());
-        DataStream<Tuple2<Long, Long>> sums = elements.filter(p-> (p.f0 % RandomLongSource.SIZE == 0)).map(new MapFunction<Tuple2<Long, Long>, Tuple2<Long, Long>>() {
+        DataStream<Tuple2<Long, Long>> sums = elements.map(new MapFunction<Tuple2<Long, Long>, Tuple2<Long, Long>>() {
             @Override
             public Tuple2<Long, Long> map(Tuple2<Long, Long> tuple2) throws Exception {
                 return new Tuple2<>(tuple2.f0, (System.currentTimeMillis() - tuple2.f1));
