@@ -21,11 +21,14 @@ package com.rdma.benchmarks;
 
 import java.util.concurrent.LinkedBlockingQueue;
 
-import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
+import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
+import org.apache.flink.util.Collector;
 
 /**
  * Skeleton for a Flink Streaming Job.
@@ -40,49 +43,79 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
 public class StreamingJob {
-    static LinkedBlockingQueue<Tuple2<Long, Long>> producer;
+    static LinkedBlockingQueue<Tuple2<Long, Long>> producer = new LinkedBlockingQueue<>();
+    static int CountWindowSize = 6;
+
 
     public static void main(String[] args) throws Exception {
         System.out.println("usage rdma-*.jar <outpath> <producerThreadCount>");
-        String outPath=args[0];
+        String outPath = args[0];
         int producerThreads = Integer.parseInt(args[1]);
-        for (int i=0;i<producerThreads;i++){
+        for (int i = 0; i < producerThreads; i++) {
             new Thread(new Producer(producer)).start();
         }
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        // we may want to vary this
         env.setBufferTimeout(0);
-        DataStream<Tuple2<Long, Long>> elements = env.addSource(new RandomLongSource(producer));
-        DataStream<Tuple2<Long, Long>> sums = elements
-//                .filter(p -> (p.f0 % RandomLongSource.SIZE == 0))
-                .map(new MapFunction<Tuple2<Long, Long>, Tuple2<Long, Long>>() {
-            @Override
-            public Tuple2<Long, Long> map(Tuple2<Long, Long> tuple2) throws Exception {
-                return new Tuple2<>(tuple2.f0, (System.currentTimeMillis() - tuple2.f1));
-            }
-        });
+        DataStream<Tuple2<Long, Long>> elements = env.addSource(new RandomLongSource(producer,producerThreads));
+        DataStream<Tuple2<Long, Double>> avgLatency = elements.keyBy(0).
+                       countWindow(CountWindowSize).apply(new AverageLatencyWindowFunction());
 
-        sums.writeAsText(outPath,FileSystem.WriteMode.OVERWRITE);
-//        sums.addSink(new DiscardingSink<>());
-        // execute program
+        // output size should be threadCount* Producer.maxIterations* Producer.SIZE/CountWindowSize
+        avgLatency.writeAsText(outPath, FileSystem.WriteMode.OVERWRITE);
         env.execute("Flink Streaming Java API Skeleton");
+    }
+
+
+    private static class AverageLatencyWindowFunction implements WindowFunction<Tuple2<Long, Long>, Tuple2<Long, Double>, Tuple, GlobalWindow>{
+
+
+        @Override
+        public void apply(Tuple tuple, GlobalWindow globalWindow, Iterable<Tuple2<Long, Long>> values,
+                          Collector<Tuple2<Long, Double>> collector) throws Exception {
+            double sum=0;
+            long currentMills = System.currentTimeMillis();
+            for (Tuple2<Long,Long> value: values
+                 ) {
+                sum+= currentMills - value.f1;
+            }
+            long key=0;
+            for (Tuple2<Long,Long> value: values
+                 ) {
+                key = value.f0;
+                break;
+            }
+
+            collector.collect(new Tuple2<>(key,sum/CountWindowSize));
+        }
     }
 }
 
-class Producer implements Runnable{
+
+
+
+class Producer implements Runnable {
+    //    static int SIZE = 10_000_000;
+    static int SIZE = 1000;
     LinkedBlockingQueue<Tuple2<Long, Long>> producer;
+    int maxIterations = 100;
 
-
-    public Producer(LinkedBlockingQueue<Tuple2<Long, Long>> producer){
-        this.producer= producer;
+    public Producer(LinkedBlockingQueue<Tuple2<Long, Long>> producer) {
+        this.producer = producer;
     }
 
     @Override
     public void run() {
-        while (true) {
-            for (long i=0;i<RandomLongSource.SIZE;i++) {
-                producer.add(new Tuple2<>(i,System.currentTimeMillis()));
+        int iter = 0;
+        while (iter < maxIterations) {
+            iter++;
+            for (long i = 0; i < SIZE; i++) {
+                producer.add(new Tuple2<>(i, System.currentTimeMillis()));
             }
         }
+        // add poision pill from this thread
+        // Should only add one poision pill per thread as data source depends on the pill count.
+        producer.add(new Tuple2<>(RandomLongSource.POISON, System.currentTimeMillis()));
     }
 }
