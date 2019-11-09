@@ -20,14 +20,20 @@ public class RandomLongSource implements ParallelSourceFunction<Tuple2<Long, Lon
 
     @Override
     public void run(SourceContext<Tuple2<Long, Long>> sourceContext) throws Exception {
-        // read from the queue, until poision pill from each thread is received.
-        Thread.sleep(3000); // RDMA connection setup, should not be included in latency calculations.
+
+        // ATTENTION: Flink only establishes the network connections on first data element.
+        // So, our experiments should send some data before taking metrics. That means, our experiments would
+        // become complicated.
+        // Reference: https://cwiki.apache.org/confluence/display/FLINK/Data+exchange+between+tasks
+
 
         // start producer threads
         for (int i = 0; i < producerThreads; i++) {
             new Thread(new Producer(producer)).start();
         }
-
+        // read from the queue, until poision pill from each thread is received on the current instance of source.
+        // If two threads are generating data on the current source instance, then two poision pills should be received
+        // on the source.
         while (poisonPillCount <= producerThreads) {
                 Tuple2<Long,Long> tuple = producer.take();
                 if (tuple.f0 != POISON) {
