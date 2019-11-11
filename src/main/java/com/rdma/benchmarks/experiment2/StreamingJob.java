@@ -71,11 +71,11 @@ public class StreamingJob {
                           Collector<Tuple2<Long, Double>> collector) throws Exception {
             double sum=0;
             long currentMills = System.currentTimeMillis();
-            for (Tuple2<Long,Long> value: values
-                 ) {
+            for (Tuple2<Long,Long> value: values) {
                 sum+= currentMills - value.f1;
             }
             long key=0;
+
             for (Tuple2<Long,Long> value: values
                  ) {
                 key = value.f0;

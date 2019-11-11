@@ -26,7 +26,7 @@ public class RandomLongSource implements ParallelSourceFunction<Tuple2<Long, Lon
         // become complicated.
         // Reference: https://cwiki.apache.org/confluence/display/FLINK/Data+exchange+between+tasks
 
-
+        Thread.sleep(15000);
         // start producer threads
         for (int i = 0; i < producerThreads; i++) {
             new Thread(new Producer(producer)).start();
