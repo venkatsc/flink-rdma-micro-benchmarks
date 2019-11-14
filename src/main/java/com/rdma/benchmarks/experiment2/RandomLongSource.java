@@ -1,5 +1,7 @@
 package com.rdma.benchmarks.experiment2;
 
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -25,8 +27,13 @@ public class RandomLongSource implements ParallelSourceFunction<Tuple2<Long, Lon
         // So, our experiments should send some data before taking metrics. That means, our experiments would
         // become complicated.
         // Reference: https://cwiki.apache.org/confluence/display/FLINK/Data+exchange+between+tasks
+        for (int j=0;j< StreamingJob.CountWindowSize; j++) {
+            for (long i = -1; i > -10_0; i--) {
+                sourceContext.collect(new Tuple2<>(i, System.currentTimeMillis()));
+            }
+        }
+        Thread.sleep(30000);
 
-        Thread.sleep(15000);
         // start producer threads
         for (int i = 0; i < producerThreads; i++) {
             new Thread(new Producer(producer)).start();
@@ -53,12 +60,12 @@ public class RandomLongSource implements ParallelSourceFunction<Tuple2<Long, Lon
 
 
 class Producer implements Runnable {
-    static int SIZE = 1_000;
+    public static int SIZE = 1_000;
     //    static int SIZE = 1000;
-    LinkedBlockingQueue<Tuple2<Long, Long>> producer;
-    int maxIterations = 5_000;
+    BlockingQueue<Tuple2<Long, Long>> producer;
+    public static int maxIterations = 500_00;
 
-    public Producer(LinkedBlockingQueue<Tuple2<Long, Long>> producer) {
+    public Producer(BlockingQueue<Tuple2<Long, Long>> producer) {
         this.producer = producer;
     }
 

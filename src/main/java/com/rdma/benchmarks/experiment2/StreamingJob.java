@@ -21,6 +21,7 @@ package com.rdma.benchmarks.experiment2;
 
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -42,11 +43,12 @@ import org.apache.flink.util.Collector;
  */
 public class StreamingJob {
 //    static LinkedBlockingQueue<Tuple2<Long, Long>> producer = new LinkedBlockingQueue<>();
-    static int CountWindowSize = 500;
+    static int CountWindowSize = 5000;
 
 
     public static void main(String[] args) throws Exception {
         System.out.println("usage rdma-*.jar <outpath> <producerThreadCount>");
+
         String outPath = args[0];
         int producerThreads = Integer.parseInt(args[1]);
 
@@ -58,7 +60,7 @@ public class StreamingJob {
                        countWindow(CountWindowSize).apply(new AverageLatencyWindowFunction());
 
         // output size should be threadCount* Producer.maxIterations* Producer.SIZE/CountWindowSize
-        avgLatency.writeAsText(outPath, FileSystem.WriteMode.OVERWRITE);
+        avgLatency.writeAsCsv(outPath, FileSystem.WriteMode.OVERWRITE);
         env.execute("Flink Streaming Java API Skeleton");
     }
 
@@ -74,6 +76,7 @@ public class StreamingJob {
             for (Tuple2<Long,Long> value: values) {
                 sum+= currentMills - value.f1;
             }
+
             long key=0;
 
             for (Tuple2<Long,Long> value: values
