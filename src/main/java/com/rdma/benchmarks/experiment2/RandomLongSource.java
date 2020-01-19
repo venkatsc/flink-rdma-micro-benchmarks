@@ -16,8 +16,8 @@ public class RandomLongSource implements ParallelSourceFunction<Tuple2<Long, Lon
     private int iterations = 1;
     private int currentIteration = 1;
     private int producerThreads;
-    int poisonPillCount = 1;
-    private final LinkedBlockingQueue<Tuple2<Long, Long>> producer = new LinkedBlockingQueue<>();
+    int poisonPillCount = 0;
+    private final ArrayBlockingQueue<Tuple2<Long, Long>> producer = new ArrayBlockingQueue<>(10_000_000);
 
     public RandomLongSource(int producerThreads) {
         this.producerThreads = producerThreads;
@@ -39,21 +39,34 @@ public class RandomLongSource implements ParallelSourceFunction<Tuple2<Long, Lon
         Thread.sleep(30000);
 
         // start producer threads
-        for (int i = 0; i < producerThreads; i++) {
-            new Thread(new Producer(producer)).start();
-        }
+//        for (int i = 0; i < producerThreads; i++) {
+//            new Thread(new Producer(producer)).start();
+//        }
         // read from the queue, until poision pill from each thread is received on the current instance of source.
         // If two threads are generating data on the current source instance, then two poision pills should be received
         // on the source.
-        while (poisonPillCount <= producerThreads) {
-            Tuple2<Long, Long> tuple = producer.take();
-            if (tuple.f0 != POISON) {
-                sourceContext.collect(tuple);
-            } else {
-                System.out.println("Received poision pill " + poisonPillCount);
-                poisonPillCount++;
-            }
+        int iter = 0;
+        while (iter < StreamingJob.PRODUCER_NUMBER_OF_ITERATIONS) {
+            iter++;
+                for (long i = 1; i <= StreamingJob.PRODUCER_ELEMENTS_PER_ITERATION; i++) {
+                    if (i == StreamingJob.PRODUCER_ELEMENTS_PER_ITERATION) { // time stamp last element in the generated size
+                        sourceContext.collect(new Tuple2<>(i, System.currentTimeMillis()));
+                    } else {
+                        sourceContext.collect(new Tuple2<>(i, -i));
+                    }
+                }
+
         }
+
+//        while (poisonPillCount < producerThreads) {
+//            Tuple2<Long, Long> tuple = producer.take();
+//            if (tuple.f0 != POISON) {
+//                sourceContext.collect(tuple);
+//            } else {
+//                System.out.println("Received poision pill " + poisonPillCount);
+//                poisonPillCount++;
+//            }
+//        }
     }
 
     @Override
@@ -77,15 +90,20 @@ class Producer implements Runnable {
     @Override
     public void run() {
         int iter = 0;
-        while (iter < StreamingJob.PRODUCER_NUMBER_OF_PER_ITERATION) {
+        while (iter < StreamingJob.PRODUCER_NUMBER_OF_ITERATIONS) {
             iter++;
             rateLimiter.acquire(StreamingJob.PRODUCER_ELEMENTS_PER_ITERATION);
-            for (long i = 1; i <= StreamingJob.PRODUCER_ELEMENTS_PER_ITERATION; i++) {
-//                if (i == StreamingJob.PRODUCER_ELEMENTS_PER_ITERATION) {
-                producer.add(new Tuple2<>(i, System.currentTimeMillis()));
-////                } else {
-//                    producer.add(new Tuple2<>(i, i));
-//                }
+            try {
+                for (long i = 1; i <= StreamingJob.PRODUCER_ELEMENTS_PER_ITERATION; i++) {
+                    if (i == StreamingJob.PRODUCER_ELEMENTS_PER_ITERATION) { // time stamp last element in the generated size
+                        producer.put(new Tuple2<>(i, System.currentTimeMillis()));
+                    } else {
+                        producer.put(new Tuple2<>(i, -i));
+                    }
+                }
+                Thread.yield();
+            }catch (Exception e){
+                e.printStackTrace();
             }
         }
         // add poision pill from this thread

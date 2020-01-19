@@ -19,7 +19,10 @@
 package com.rdma.benchmarks.experiment2;
 
 
+import org.apache.flink.api.common.functions.FilterFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -37,36 +40,62 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
 public class StreamingJob {
-//    static LinkedBlockingQueue<Tuple2<Long, Long>> producer = new LinkedBlockingQueue<>();
+    //    static LinkedBlockingQueue<Tuple2<Long, Long>> producer = new LinkedBlockingQueue<>();
     public static int CountWindowSize = 5000;
     public static int PRODUCER_ELEMENTS_PER_ITERATION = 1_000;
-    public static int PRODUCER_NUMBER_OF_PER_ITERATION = 500_000;
-    public static int PRODUCER_RATE_LIMIT = 500_000;
-    public static int SOURCE_PARALLELISM = 3;
+    public static int PRODUCER_NUMBER_OF_ITERATIONS = 1_000_000;
+    public static int PRODUCER_RATE_LIMIT = 10_000_000;
+    public static int SOURCE_PARALLELISM = 10;
+
+    // LOCAL execution settings
+//    public static int CountWindowSize = 50;
+//    public static int PRODUCER_ELEMENTS_PER_ITERATION = 1_000;
+//    public static int PRODUCER_NUMBER_OF_ITERATIONS = 50;
+//    public static int PRODUCER_RATE_LIMIT = 1_000;
+//    public static int SOURCE_PARALLELISM = 1;
 
 
     public static void main(String[] args) throws Exception {
-        System.out.println("usage rdma-*.jar <outpath> <producerThreadCount>");
-
-        System.out.println("\n\nOutput size would be ");
+        System.out.println("usage rdma-*.jar <outpath>");
 
         String outPath = args[0];
-        int producerThreads = Integer.parseInt(args[1]);
+//        int producerThreads = Integer.parseInt(args[1);
+
+//        String local = args[1]; // local environment execution with small sizes
+//        if (local.startsWith("l")) {
+//            System.out.println("\n\nExecuting with local environment settings\n\n");
+//
+//        }
+//        System.exit(0);
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         // we may want to vary this
-        env.setBufferTimeout(-1);
-        DataStream<Tuple2<Long, Long>> elements = env.addSource(new RandomLongSource(producerThreads)).setParallelism(SOURCE_PARALLELISM);
-        DataStream<Tuple2<Long, Long>> avgLatency = elements.keyBy(0).
-                       countWindow(CountWindowSize).aggregate(new WindowLatencyAggregator());
+//        env.setBufferTimeout(-1);
+        DataStream<Tuple2<Long, Long>> elements = env.addSource(new RandomLongSource(1)).setParallelism
+                (SOURCE_PARALLELISM);
+        DataStream<Tuple3<Long, Long, Long>> avgLatency = elements.keyBy(0).
+                countWindow(CountWindowSize).aggregate(new WindowLatencyAggregator());
+        DataStream<Tuple2<Long, Long>> filtered = avgLatency.filter(new FilterFunction<Tuple3<Long, Long,
+                Long>>() {
+            @Override
+            public boolean filter(Tuple3<Long, Long, Long> tuple2) throws Exception {
+                return tuple2.f0 > 0; // filter out all windows except the window triggered by last element in the iteration.
+            }
+        }).map(new MapFunction<Tuple3<Long, Long, Long>, Tuple2< Long, Long>>() {
+            @Override
+            public Tuple2<Long, Long> map(Tuple3<Long, Long, Long> value) throws Exception {
+                return new Tuple2<>(value.f1,value.f2); // extract timestamp and latency
+            }
+        });
 
         // output size should be threadCount* Producer.maxIterations* Producer.SIZE/CountWindowSize
-        avgLatency.writeAsCsv(outPath, FileSystem.WriteMode.OVERWRITE);
+        filtered.writeAsCsv(outPath, FileSystem.WriteMode.OVERWRITE);
         env.execute("Flink Streaming Java API Skeleton");
     }
 
 
-//    private static class AverageLatencyWindowFunction implements AggregateFunction<Tuple2<Long, Long>, Tuple2<Long, Double>, Tuple, GlobalWindow> {
+//    private static class AverageLatencyWindowFunction implements AggregateFunction<Tuple2<Long, Long>, Tuple2<Long,
+// Double>, Tuple, GlobalWindow> {
 //
 //
 //        @Override

@@ -4,6 +4,7 @@ public class WindowLatency {
     private int keyCount=0;
     private long id = 0;
     private long latency = 0;
+    private long triggerTimestamp;
 
     public void incrementKeyCount(){
      keyCount++;
@@ -34,4 +35,11 @@ public class WindowLatency {
     }
 
 
+    public long getTriggerTimestamp() {
+        return triggerTimestamp;
+    }
+
+    public void setTriggerTimestamp(long triggerTimestamp) {
+        this.triggerTimestamp = triggerTimestamp;
+    }
 }
